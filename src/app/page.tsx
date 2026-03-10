@@ -64,7 +64,7 @@ export default function LandingPage() {
       <div className="md:w-1/2 bg-augusta-green flex flex-col items-center justify-center px-8 py-16 md:py-0">
         <div className="text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <span className="text-5xl md:text-6xl">🌲</span>
+            <span className="text-5xl md:text-6xl">🪓</span>
             <h1 className="text-4xl md:text-5xl font-bold text-white tracking-wider font-serif">
               LUMBERJACKS
             </h1>

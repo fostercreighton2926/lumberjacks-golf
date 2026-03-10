@@ -22,7 +22,7 @@ export default function Sidebar({ currentPath, isAdmin }: SidebarProps) {
       <div className="px-6 py-8 border-b border-white/10">
         <Link href="/dashboard" className="block">
           <div className="flex items-center gap-2">
-            <span className="text-3xl">🌲</span>
+            <span className="text-3xl">🪓</span>
             <span className="text-xl font-serif font-bold tracking-wide">
               LUMBERJACKS
             </span>
