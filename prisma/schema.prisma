@@ -20,6 +20,7 @@ model User {
   weeklyResults WeeklyResult[]
   leagueMembers LeagueMember[]
   createdLeagues League[]     @relation("CreatedBy")
+  draftPicks     DraftPick[]
 }
 
 model Session {
@@ -55,6 +56,7 @@ model Tournament {
   results      TournamentResult[]
   picks        Pick[]
   weeklyResults WeeklyResult[]
+  drafts       Draft[]
 }
 
 model Golfer {
@@ -66,6 +68,7 @@ model Golfer {
   fields     TournamentField[]
   results    TournamentResult[]
   picks      Pick[]
+  draftPicks DraftPick[]
 }
 
 model TournamentField {
@@ -106,6 +109,7 @@ model League {
   members   LeagueMember[]
   picks     Pick[]
   weeklyResults WeeklyResult[]
+  drafts    Draft[]
 }
 
 model LeagueMember {
@@ -148,4 +152,33 @@ model WeeklyResult {
   tournament   Tournament @relation(fields: [tournamentId], references: [id])
 
   @@unique([leagueId, userId, tournamentId])
+}
+
+model Draft {
+  id               String      @id @default(cuid())
+  leagueId         String
+  tournamentId     String
+  status           String      @default("pending") // pending, active, complete
+  currentRound     Int         @default(1)
+  currentPickIndex Int         @default(0)
+  draftOrder       String      // JSON array of userIds for round 1 order
+  createdAt        DateTime    @default(now())
+  league           League      @relation(fields: [leagueId], references: [id])
+  tournament       Tournament  @relation(fields: [tournamentId], references: [id])
+  picks            DraftPick[]
+
+  @@unique([leagueId, tournamentId])
+}
+
+model DraftPick {
+  id         String   @id @default(cuid())
+  draftId    String
+  userId     String
+  golferId   String
+  round      Int
+  pickNumber Int
+  createdAt  DateTime @default(now())
+  draft      Draft    @relation(fields: [draftId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+  golfer     Golfer   @relation(fields: [golferId], references: [id])
 }

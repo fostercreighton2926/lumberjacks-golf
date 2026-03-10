@@ -9,6 +9,7 @@ interface SidebarProps {
 
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: '◉' },
+  { href: '/draft', label: 'Draft', icon: '🐍' },
   { href: '/picks', label: 'Picks', icon: '✎' },
   { href: '/standings', label: 'Standings', icon: '☰' },
   { href: '/leagues', label: 'Leagues', icon: '⚑' },
