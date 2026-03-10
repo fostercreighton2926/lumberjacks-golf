@@ -1,94 +1,67 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import GolferSearch from '@/components/picks/GolferSearch';
-import PickSlot from '@/components/picks/PickSlot';
-import { isBeforeDeadline } from '@/lib/utils';
+
+interface GolferScore {
+  golferId: string;
+  golferName: string;
+  ranking: number | null;
+  scoreToPar: number | null;
+  r1Score: number | null;
+  r2Score: number | null;
+  r3Score: number | null;
+  r4Score: number | null;
+  status: string;
+  isCounting: boolean;
+}
 
 interface Tournament {
   id: string;
   name: string;
-  courseName: string;
+  course: string;
   startDate: string;
   endDate: string;
-  pickDeadline: string;
   isComplete: boolean;
-  field: FieldGolfer[];
-  results?: TournamentResult[];
-}
-
-interface FieldGolfer {
-  id: string;
-  golferId: string;
-  golferName: string;
-  ranking: number | null;
-}
-
-interface TournamentResult {
-  golferId: string;
-  golferName: string;
-  position: number;
-  scoreToPar: number;
-  status: string;
+  results?: Array<{
+    golferId: string;
+    scoreToPar: number | null;
+    r1Score: number | null;
+    r2Score: number | null;
+    r3Score: number | null;
+    r4Score: number | null;
+    status: string;
+  }>;
 }
 
 interface League {
   id: string;
   name: string;
-  inviteCode: string;
-  season: { id: string; name: string; year: number };
-  members: { userId: string; username: string }[];
 }
 
-interface ExistingPick {
-  id: string;
-  golferId: string;
-  golferName: string;
-  pickOrder: number;
+function formatScore(score: number | null): string {
+  if (score == null) return '--';
+  if (score === 0) return 'E';
+  return score > 0 ? `+${score}` : `${score}`;
 }
 
-interface MemberPicks {
-  userId: string;
-  username: string;
-  hasPicked: boolean;
-  picks: ExistingPick[];
+function formatRound(score: number | null): string {
+  if (score == null) return '-';
+  return String(score);
 }
 
-interface SelectedGolfer {
-  golferId: string;
-  golferName: string;
-}
-
-const MAX_PICKS = 7;
-
-export default function PicksPage() {
+export default function MyTeamPage() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string>('');
-  const [selectedGolfers, setSelectedGolfers] = useState<SelectedGolfer[]>([]);
-  const [leagueMemberPicks, setLeagueMemberPicks] = useState<MemberPicks[]>([]);
-  const [userId, setUserId] = useState<string>('');
-
+  const [selectedLeagueId, setSelectedLeagueId] = useState('');
+  const [golfers, setGolfers] = useState<GolferScore[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const picksOpen = tournament
-    ? isBeforeDeadline(new Date(tournament.pickDeadline))
-    : false;
-  const tournamentLive =
-    tournament &&
-    !tournament.isComplete &&
-    !picksOpen &&
-    new Date(tournament.endDate) >= new Date();
-
-  // Initial data fetch
   useEffect(() => {
-    async function fetchInitialData() {
+    async function fetchData() {
       try {
         const [meRes, tournamentRes, leaguesRes] = await Promise.all([
           fetch('/api/auth/me'),
@@ -102,195 +75,116 @@ export default function PicksPage() {
           return;
         }
 
-        const meData = await meRes.json();
-        setUserId(meData.user.id);
-
         if (!tournamentRes.ok) {
-          setTournament(null);
           setLoading(false);
           return;
         }
 
         const tournamentData = await tournamentRes.json();
         if (!tournamentData.tournament) {
-          setTournament(null);
           setLoading(false);
           return;
         }
 
-        // If tournament exists, fetch full details (for results data)
         const detailRes = await fetch(`/api/tournaments/${tournamentData.tournament.id}`);
-        if (detailRes.ok) {
-          const detailData = await detailRes.json();
-          setTournament(detailData);
-        } else {
-          setTournament(tournamentData.tournament);
-        }
+        const detail = detailRes.ok ? await detailRes.json() : tournamentData.tournament;
+        setTournament(detail);
 
         if (leaguesRes.ok) {
           const leaguesData = await leaguesRes.json();
-          setLeagues(leaguesData.leagues);
-          if (leaguesData.leagues.length > 0) {
+          setLeagues(leaguesData.leagues || []);
+          if (leaguesData.leagues?.length > 0) {
             setSelectedLeagueId(leaguesData.leagues[0].id);
           }
         }
       } catch {
-        setError('Failed to load picks data');
+        setError('Failed to load data');
       } finally {
         setLoading(false);
       }
     }
-
-    fetchInitialData();
+    fetchData();
   }, []);
 
-  // Fetch existing picks when league or tournament changes
+  // Fetch user's picks when league/tournament changes
   useEffect(() => {
     if (!selectedLeagueId || !tournament) return;
 
     async function fetchPicks() {
       try {
-        // Fetch user's own picks
         const picksRes = await fetch(
           `/api/picks/${tournament!.id}?leagueId=${selectedLeagueId}`
         );
-        if (picksRes.ok) {
-          const picksData = await picksRes.json();
-          if (picksData.picks && picksData.picks.length > 0) {
-            setSelectedGolfers(
-              picksData.picks.map((p: ExistingPick) => ({
-                golferId: p.golferId,
-                golferName: p.golferName,
-              }))
-            );
-          } else {
-            setSelectedGolfers([]);
+        if (!picksRes.ok) return;
+        const picksData = await picksRes.json();
+        const picks = picksData.picks || [];
+
+        if (picks.length === 0) {
+          setGolfers([]);
+          return;
+        }
+
+        // Build results map
+        const resultsMap = new Map<string, {
+          scoreToPar: number | null;
+          r1Score: number | null;
+          r2Score: number | null;
+          r3Score: number | null;
+          r4Score: number | null;
+          status: string;
+        }>();
+        if (tournament!.results) {
+          for (const r of tournament!.results) {
+            resultsMap.set(r.golferId, r);
           }
         }
 
-        // Fetch league members' picks (visible after deadline)
-        const leaguePicksRes = await fetch(
-          `/api/picks/${tournament!.id}/league/${selectedLeagueId}`
+        const golferScores: GolferScore[] = picks.map((p: {
+          golferId: string;
+          golferName: string;
+          ranking?: number | null;
+        }) => {
+          const result = resultsMap.get(p.golferId);
+          return {
+            golferId: p.golferId,
+            golferName: p.golferName,
+            ranking: p.ranking ?? null,
+            scoreToPar: result?.scoreToPar ?? null,
+            r1Score: result?.r1Score ?? null,
+            r2Score: result?.r2Score ?? null,
+            r3Score: result?.r3Score ?? null,
+            r4Score: result?.r4Score ?? null,
+            status: result?.status ?? 'active',
+            isCounting: false,
+          };
+        });
+
+        // Determine best 4
+        const sorted = [...golferScores].sort(
+          (a, b) => (a.scoreToPar ?? 999) - (b.scoreToPar ?? 999)
         );
-        if (leaguePicksRes.ok) {
-          const leaguePicksData = await leaguePicksRes.json();
-          setLeagueMemberPicks(leaguePicksData.members || []);
+        const best4Ids = new Set(sorted.slice(0, 4).map((g) => g.golferId));
+        for (const g of golferScores) {
+          g.isCounting = best4Ids.has(g.golferId);
         }
-      } catch (err) {
-        console.error('Failed to fetch picks:', err);
+
+        // Sort: counting first by score, then dropped
+        golferScores.sort((a, b) => {
+          if (a.isCounting !== b.isCounting) return a.isCounting ? -1 : 1;
+          return (a.scoreToPar ?? 999) - (b.scoreToPar ?? 999);
+        });
+
+        setGolfers(golferScores);
+      } catch {
+        // ignore
       }
     }
-
     fetchPicks();
   }, [selectedLeagueId, tournament]);
 
-  const handleToggleGolfer = useCallback(
-    (golferId: string) => {
-      if (!picksOpen) return;
-
-      setSelectedGolfers((prev) => {
-        const exists = prev.find((g) => g.golferId === golferId);
-        if (exists) {
-          return prev.filter((g) => g.golferId !== golferId);
-        }
-        if (prev.length >= MAX_PICKS) return prev;
-
-        const fieldGolfer = tournament?.field.find((f) => f.golferId === golferId);
-        if (!fieldGolfer) return prev;
-
-        return [...prev, { golferId, golferName: fieldGolfer.golferName }];
-      });
-
-      setSubmitMessage(null);
-    },
-    [picksOpen, tournament]
-  );
-
-  const handleRemoveGolfer = useCallback(
-    (golferId: string) => {
-      if (!picksOpen) return;
-      setSelectedGolfers((prev) => prev.filter((g) => g.golferId !== golferId));
-      setSubmitMessage(null);
-    },
-    [picksOpen]
-  );
-
-  const handleSubmit = async () => {
-    if (!tournament || !selectedLeagueId) return;
-    if (selectedGolfers.length !== MAX_PICKS) return;
-
-    setSubmitting(true);
-    setSubmitMessage(null);
-
-    try {
-      const res = await fetch(`/api/picks/${tournament.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leagueId: selectedLeagueId,
-          picks: selectedGolfers.map((g, index) => ({
-            golferId: g.golferId,
-            pickOrder: index + 1,
-          })),
-        }),
-      });
-
-      if (res.ok) {
-        setSubmitMessage({ type: 'success', text: 'Picks submitted successfully!' });
-      } else {
-        const data = await res.json();
-        setSubmitMessage({
-          type: 'error',
-          text: data.error || 'Failed to submit picks',
-        });
-      }
-    } catch {
-      setSubmitMessage({ type: 'error', text: 'Network error. Please try again.' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Build results lookup for live scoring
-  const resultsMap = new Map<string, TournamentResult>();
-  if (tournament?.results) {
-    for (const r of tournament.results) {
-      resultsMap.set(r.golferId, r);
-    }
-  }
-
-  // Build pick slot data with optional scores
-  const pickSlots = Array.from({ length: MAX_PICKS }, (_, i) => {
-    const golfer = selectedGolfers[i] || null;
-    if (!golfer) return null;
-
-    const result = resultsMap.get(golfer.golferId);
-    return {
-      golferId: golfer.golferId,
-      golferName: golfer.golferName,
-      scoreToPar: result?.scoreToPar ?? null,
-      status: result?.status ?? undefined,
-    };
-  });
-
-  // Determine which picks are "counting" (best 5 of 7)
-  const countingIndices = new Set<number>();
-  if (tournamentLive || tournament?.isComplete) {
-    const scored = pickSlots
-      .map((slot, i) => ({ slot, index: i }))
-      .filter((s) => s.slot?.scoreToPar != null);
-    scored.sort((a, b) => (a.slot!.scoreToPar as number) - (b.slot!.scoreToPar as number));
-    scored.slice(0, 5).forEach((s) => countingIndices.add(s.index));
-  }
-
-  const selectedIdSet = new Set(selectedGolfers.map((g) => g.golferId));
-
-  const golferList =
-    tournament?.field.map((f) => ({
-      id: f.golferId,
-      name: f.golferName,
-      ranking: f.ranking,
-    })) ?? [];
+  const teamTotal = golfers
+    .filter((g) => g.isCounting)
+    .reduce((sum, g) => sum + (g.scoreToPar ?? 0), 0);
 
   if (loading) {
     return (
@@ -302,237 +196,163 @@ export default function PicksPage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Card className="p-8 text-center max-w-md">
+      <div className="px-4 py-8">
+        <Card className="p-6 text-center">
           <p className="text-red-600 font-medium">{error}</p>
-          <Link href="/login" className="text-augusta-green underline mt-2 inline-block text-sm">
-            Go to Login
-          </Link>
         </Card>
       </div>
     );
   }
 
-  // No leagues
-  if (leagues.length === 0) {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-12">
-        <Card className="p-8 text-center">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">No Leagues Yet</h2>
-          <p className="text-gray-500 mb-6">
-            You need to join or create a league before making picks.
-          </p>
-          <div className="flex items-center justify-center gap-3">
-            <Link href="/leagues/create">
-              <Button variant="primary">Create a League</Button>
-            </Link>
-            <Link href="/leagues/join">
-              <Button variant="secondary">Join a League</Button>
-            </Link>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  // No tournament
   if (!tournament) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-12">
+      <div className="px-4 py-8">
         <Card className="p-8 text-center">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">No Upcoming Tournament</h2>
-          <p className="text-gray-500 mb-6">
-            There is no active tournament at this time. Check back later.
-          </p>
+          <h2 className="text-lg font-bold text-gray-900 mb-2">No Active Tournament</h2>
+          <p className="text-gray-500 text-sm mb-4">Check back when a tournament is scheduled.</p>
           <Link href="/dashboard">
-            <Button variant="secondary">Back to Dashboard</Button>
+            <Button variant="secondary">Dashboard</Button>
           </Link>
         </Card>
       </div>
     );
   }
 
-  const otherMemberPicks = leagueMemberPicks.filter((m) => m.userId !== userId);
+  if (golfers.length === 0) {
+    return (
+      <div className="px-4 py-6 max-w-lg mx-auto space-y-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">My Team</h1>
+          <p className="text-sm text-gray-500">{tournament.name}</p>
+        </div>
+        <Card className="p-8 text-center">
+          <p className="text-gray-500 mb-4">No golfers drafted yet for this tournament.</p>
+          <Link href="/draft">
+            <Button variant="primary">Go to Draft</Button>
+          </Link>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-      {/* Tournament Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+    <div className="px-4 py-4 pb-24 max-w-lg mx-auto space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-augusta-green">{tournament.name}</h1>
-          <p className="text-sm text-gray-500 mt-1">{tournament.courseName}</p>
-          <p className="text-sm text-gray-500">
-            Deadline:{' '}
-            {new Date(tournament.pickDeadline).toLocaleDateString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-            })}{' '}
-            at{' '}
-            {new Date(tournament.pickDeadline).toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
+          <h1 className="text-xl font-bold text-gray-900">My Team</h1>
+          <p className="text-sm text-gray-500">{tournament.name}</p>
+        </div>
+        {leagues.length > 1 && (
+          <select
+            value={selectedLeagueId}
+            onChange={(e) => setSelectedLeagueId(e.target.value)}
+            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006747]"
+          >
+            {leagues.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {/* Team Total */}
+      <Card goldBorder className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Team Total</p>
+            <p className="text-sm text-gray-400">Best 4 of 7</p>
+          </div>
+          <p
+            className={`text-3xl font-bold ${
+              teamTotal < 0 ? 'text-red-600' : teamTotal > 0 ? 'text-gray-700' : 'text-[#006747]'
+            }`}
+          >
+            {formatScore(teamTotal)}
           </p>
         </div>
+      </Card>
 
-        {/* League Selector */}
-        {leagues.length > 1 && (
-          <div className="flex items-center gap-2">
-            <label htmlFor="league-select" className="text-sm font-medium text-gray-700">
-              League:
-            </label>
-            <select
-              id="league-select"
-              value={selectedLeagueId}
-              onChange={(e) => setSelectedLeagueId(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-augusta-green focus:border-transparent"
+      {/* Golfer List */}
+      <div className="space-y-2">
+        {golfers.map((golfer, idx) => (
+          <Card
+            key={golfer.golferId}
+            className={`overflow-hidden ${!golfer.isCounting ? 'opacity-60' : ''}`}
+          >
+            <div
+              className={`px-4 py-3 ${
+                golfer.isCounting
+                  ? 'bg-[#006747]/5 border-l-4 border-[#006747]'
+                  : 'border-l-4 border-transparent'
+              }`}
             >
-              {leagues.map((league) => (
-                <option key={league.id} value={league.id}>
-                  {league.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {!picksOpen && (
-          <span className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 bg-gray-100 px-4 py-2 rounded-lg self-start">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            Picks Locked
-          </span>
-        )}
-      </div>
-
-      {/* Main Content: Search + Slots */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: Golfer Search */}
-        <div className="lg:col-span-3">
-          <Card className="p-5">
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">
-              {picksOpen ? 'Select Golfers' : 'Tournament Field'}
-            </h2>
-            <p className="text-sm text-gray-500 mb-4">
-              {picksOpen
-                ? `Choose ${MAX_PICKS} golfers for your team. ${selectedGolfers.length}/${MAX_PICKS} selected.`
-                : 'Picks are locked for this tournament.'}
-            </p>
-            <GolferSearch
-              golfers={golferList}
-              selectedIds={selectedIdSet}
-              onToggle={handleToggleGolfer}
-            />
-          </Card>
-        </div>
-
-        {/* Right: Pick Slots + Submit */}
-        <div className="lg:col-span-2 space-y-4">
-          <Card className="p-5">
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">
-              Your Picks
-            </h2>
-            <div className="space-y-2">
-              {pickSlots.map((slot, i) => (
-                <PickSlot
-                  key={i}
-                  slotNumber={i + 1}
-                  pick={slot}
-                  isCounting={countingIndices.has(i) ? true : slot ? false : undefined}
-                  onRemove={picksOpen ? handleRemoveGolfer : undefined}
-                  isLocked={!picksOpen}
-                />
-              ))}
-            </div>
-
-            {/* Submit */}
-            {picksOpen && (
-              <div className="mt-5 space-y-3">
-                <Button
-                  variant="gold"
-                  size="lg"
-                  className="w-full"
-                  disabled={selectedGolfers.length !== MAX_PICKS}
-                  loading={submitting}
-                  onClick={handleSubmit}
-                >
-                  {selectedGolfers.length === MAX_PICKS
-                    ? 'Submit Picks'
-                    : `Select ${MAX_PICKS - selectedGolfers.length} more golfer${MAX_PICKS - selectedGolfers.length !== 1 ? 's' : ''}`}
-                </Button>
-                {submitMessage && (
+              {/* Golfer name and score */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="min-w-0">
                   <p
-                    className={`text-sm text-center font-medium ${
-                      submitMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
+                    className={`text-sm font-semibold ${
+                      !golfer.isCounting ? 'line-through text-gray-400' : 'text-gray-900'
                     }`}
                   >
-                    {submitMessage.text}
+                    {golfer.golferName}
                   </p>
-                )}
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    {golfer.ranking && <span>#{golfer.ranking}</span>}
+                    {golfer.status !== 'active' && (
+                      <span className="uppercase text-red-500 font-medium">{golfer.status}</span>
+                    )}
+                    {golfer.isCounting ? (
+                      <span className="text-[#006747] font-medium">Counting</span>
+                    ) : (
+                      <span className="text-gray-400">Dropped</span>
+                    )}
+                    {!golfer.isCounting && idx >= 4 && (
+                      <span className="text-gray-300">&mdash; worst {idx - 3}</span>
+                    )}
+                  </div>
+                </div>
+                <p
+                  className={`text-lg font-bold ${
+                    golfer.scoreToPar == null
+                      ? 'text-gray-300'
+                      : golfer.scoreToPar < 0
+                      ? 'text-red-600'
+                      : golfer.scoreToPar > 0
+                      ? 'text-gray-600'
+                      : 'text-[#006747]'
+                  }`}
+                >
+                  {formatScore(golfer.scoreToPar)}
+                </p>
               </div>
-            )}
+
+              {/* Round scores */}
+              <div className="grid grid-cols-4 gap-2">
+                {['R1', 'R2', 'R3', 'R4'].map((label, i) => {
+                  const score = [golfer.r1Score, golfer.r2Score, golfer.r3Score, golfer.r4Score][i];
+                  return (
+                    <div key={label} className="text-center bg-gray-50 rounded py-1">
+                      <p className="text-[10px] text-gray-400 uppercase">{label}</p>
+                      <p className="text-sm font-medium text-gray-700">{formatRound(score)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </Card>
-        </div>
+        ))}
       </div>
 
-      {/* League Members' Picks (after deadline) */}
-      {!picksOpen && otherMemberPicks.length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            League Members&apos; Picks
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {otherMemberPicks.map((member) => (
-              <Card key={member.userId} className="p-5">
-                <h3 className="font-semibold text-gray-900 mb-3">{member.username}</h3>
-                {member.hasPicked ? (
-                  member.picks.length > 0 ? (
-                    <div className="space-y-1.5">
-                      {member.picks.map((pick, i) => {
-                        const result = resultsMap.get(pick.golferId);
-                        return (
-                          <div
-                            key={pick.golferId}
-                            className="flex items-center justify-between text-sm py-1 px-2 rounded bg-gray-50"
-                          >
-                            <span className="text-gray-700 truncate">
-                              <span className="text-xs text-gray-400 mr-1.5">{i + 1}.</span>
-                              {pick.golferName}
-                            </span>
-                            {result && (
-                              <span
-                                className={`text-xs font-semibold ml-2 ${
-                                  result.scoreToPar < 0
-                                    ? 'text-red-600'
-                                    : result.scoreToPar > 0
-                                    ? 'text-gray-500'
-                                    : 'text-gray-700'
-                                }`}
-                              >
-                                {result.scoreToPar === 0
-                                  ? 'E'
-                                  : result.scoreToPar > 0
-                                  ? `+${result.scoreToPar}`
-                                  : result.scoreToPar}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Picks hidden</p>
-                  )
-                ) : (
-                  <p className="text-sm text-gray-400 italic">No picks submitted</p>
-                )}
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Link to tournament leaderboard */}
+      <div className="text-center pt-2">
+        <Link
+          href={`/tournament/${tournament.id}`}
+          className="text-sm text-[#006747] font-medium hover:underline"
+        >
+          View Full Tournament Leaderboard &rarr;
+        </Link>
+      </div>
     </div>
   );
 }

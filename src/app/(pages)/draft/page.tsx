@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
+import Modal from '@/components/ui/Modal';
 
 interface Player {
   userId: string;
@@ -65,6 +65,9 @@ export default function DraftPage() {
   const [picking, setPicking] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
 
+  // Confirmation modal
+  const [confirmGolfer, setConfirmGolfer] = useState<AvailableGolfer | null>(null);
+
   // Admin create draft state
   const [leagues, setLeagues] = useState<League[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -80,7 +83,6 @@ export default function DraftPage() {
       const meData = await meRes.json();
       setUser(meData.user);
 
-      // Get current tournament
       const tournamentRes = await fetch('/api/tournaments/current');
       if (!tournamentRes.ok) {
         setNoDraft(true);
@@ -102,7 +104,6 @@ export default function DraftPage() {
         setNoDraft(false);
       } else {
         setNoDraft(true);
-        // Load leagues and tournaments for admin to create draft
         if (meData.user.isAdmin) {
           const [leaguesRes, tournamentsRes] = await Promise.all([
             fetch('/api/leagues'),
@@ -115,7 +116,6 @@ export default function DraftPage() {
           if (tournamentsRes.ok) {
             const td = await tournamentsRes.json();
             setTournaments(td.tournaments || []);
-            // Pre-select current tournament
             setSelectedTournament(tournamentId);
           }
         }
@@ -180,6 +180,7 @@ export default function DraftPage() {
     if (!draft || picking) return;
     setPicking(true);
     setPickError(null);
+    setConfirmGolfer(null);
     try {
       const res = await fetch('/api/draft/pick', {
         method: 'POST',
@@ -187,7 +188,6 @@ export default function DraftPage() {
         body: JSON.stringify({ draftId: draft.id, golferId }),
       });
       if (res.ok) {
-        // Refresh draft state
         const draftRes = await fetch(`/api/draft/${draft.tournamentId}?leagueId=${draft.leagueId}`);
         if (draftRes.ok) {
           const data = await draftRes.json();
@@ -231,7 +231,7 @@ export default function DraftPage() {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="px-4 py-8">
         <Card className="p-8 text-center">
           <p className="text-red-600 font-medium">{error}</p>
         </Card>
@@ -239,68 +239,51 @@ export default function DraftPage() {
     );
   }
 
-  // No draft yet - show create UI for admin or waiting message
+  // No draft yet
   if (noDraft && !draft) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">Snake Draft</h1>
+      <div className="px-4 py-6 max-w-lg mx-auto space-y-6">
+        <h1 className="text-xl font-bold text-gray-900">Snake Draft</h1>
         {user?.isAdmin ? (
-          <Card goldBorder className="p-6 space-y-4">
+          <Card goldBorder className="p-5 space-y-4">
             <h2 className="text-lg font-semibold text-gray-900">Create a Draft</h2>
-            <p className="text-sm text-gray-500">
-              Set up a snake draft for a league and tournament.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <p className="text-sm text-gray-500">Set up a snake draft for a league and tournament.</p>
+            <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  League
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">League</label>
                 <select
                   value={selectedLeague}
                   onChange={(e) => setSelectedLeague(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-augusta-green"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-augusta-green"
                 >
                   <option value="">Select league...</option>
                   {leagues.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
+                    <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tournament
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tournament</label>
                 <select
                   value={selectedTournament}
                   onChange={(e) => setSelectedTournament(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-augusta-green"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-augusta-green"
                 >
                   <option value="">Select tournament...</option>
                   {tournaments.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
+                    <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
               </div>
             </div>
-            <Button
-              variant="primary"
-              onClick={handleCreateDraft}
-              loading={creating}
-              disabled={!selectedLeague || !selectedTournament}
-            >
+            <Button variant="primary" onClick={handleCreateDraft} loading={creating} disabled={!selectedLeague || !selectedTournament}>
               Create Draft
             </Button>
           </Card>
         ) : (
           <Card className="p-8 text-center">
             <p className="text-gray-500">No active draft for the current tournament.</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Waiting for the commissioner to set up the draft.
-            </p>
+            <p className="text-sm text-gray-400 mt-1">Waiting for the commissioner to set up the draft.</p>
           </Card>
         )}
       </div>
@@ -313,45 +296,32 @@ export default function DraftPage() {
   const currentDrafterName =
     draft.players.find((p) => p.userId === draft.currentDrafter)?.username || '';
 
-  // Build the draft board grid
-  // Columns = players in draft order (round 1 order)
-  const columnOrder = draft.draftOrder;
+  // Sort golfers: ranked first by ranking asc, then unranked alphabetically
+  const sortedGolfers = [...draft.availableGolfers].sort((a, b) => {
+    if (a.ranking !== null && b.ranking !== null) return a.ranking - b.ranking;
+    if (a.ranking !== null) return -1;
+    if (b.ranking !== null) return 1;
+    return a.name.localeCompare(b.name);
+  });
 
-  // Get golfer pick for a specific round and userId
-  function getPickForCell(round: number, userId: string): DraftPickData | undefined {
-    return draft!.picksByRound[round]?.find((p) => p.userId === userId);
-  }
-
-  // Check if a cell is the current pick
-  function isCurrentPick(round: number, positionInRound: number): boolean {
-    if (draft!.status !== 'active') return false;
-    const overallIndex = (round - 1) * 4 + positionInRound;
-    return overallIndex === draft!.currentPickIndex;
-  }
-
-  // Get position in round for a user
-  function getPositionInRound(round: number, userId: string): number {
-    const roundOrder =
-      round % 2 === 0 ? [...columnOrder].reverse() : [...columnOrder];
-    return roundOrder.indexOf(userId);
-  }
-
-  // Filter available golfers by search
-  const filteredGolfers = draft.availableGolfers.filter((g) =>
+  const filteredGolfers = sortedGolfers.filter((g) =>
     g.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // My picks so far
+  const myPicks = Object.values(draft.picksByRound)
+    .flat()
+    .filter((p) => p.userId === user?.id)
+    .sort((a, b) => a.pickNumber - b.pickNumber);
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div className="px-4 py-4 pb-24 max-w-lg mx-auto space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Snake Draft</h1>
-          <p className="text-sm text-gray-500 mt-1">{draft.tournamentName}</p>
-        </div>
-        <div className="flex items-center gap-3">
+      <div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-900">Snake Draft</h1>
           <span
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
               draft.status === 'active'
                 ? 'bg-green-100 text-green-800'
                 : draft.status === 'complete'
@@ -364,33 +334,36 @@ export default function DraftPage() {
             )}
             {draft.status.charAt(0).toUpperCase() + draft.status.slice(1)}
           </span>
-          <span className="text-sm text-gray-500">
-            Round {draft.currentRound} of 7 &middot; Pick{' '}
-            {draft.totalPicks + 1 > 28 ? 28 : draft.totalPicks + 1} of 28
-          </span>
         </div>
+        <p className="text-sm text-gray-500 mt-0.5">{draft.tournamentName}</p>
+        <p className="text-xs text-gray-400">
+          Round {draft.currentRound} of 7 &middot; Pick {Math.min(draft.totalPicks + 1, 28)} of 28
+        </p>
       </div>
 
-      {/* Current turn banner */}
+      {/* YOUR PICK banner */}
       {draft.status === 'active' && (
         <div
-          className={`rounded-lg px-4 py-3 text-center font-medium ${
+          className={`rounded-xl px-4 py-4 text-center font-bold text-lg ${
             isMyTurn
-              ? 'bg-augusta-gold/20 text-augusta-green border border-augusta-gold'
-              : 'bg-gray-50 text-gray-600 border border-gray-200'
+              ? 'bg-augusta-gold/20 text-augusta-green border-2 border-augusta-gold'
+              : 'bg-gray-50 text-gray-500 border border-gray-200'
           }`}
         >
           {isMyTurn ? (
-            <>You are on the clock! Make your pick.</>
+            <>YOUR PICK</>
           ) : (
-            <>Waiting for <span className="font-bold">{currentDrafterName}</span> to pick...</>
+            <div>
+              <p className="text-sm font-normal text-gray-500">Waiting for</p>
+              <p className="text-augusta-green">{currentDrafterName}</p>
+            </div>
           )}
         </div>
       )}
 
       {draft.status === 'complete' && (
-        <div className="rounded-lg px-4 py-3 text-center font-medium bg-augusta-green/10 text-augusta-green border border-augusta-green/20">
-          Draft complete! All 28 picks have been made.
+        <div className="rounded-xl px-4 py-3 text-center font-medium bg-augusta-green/10 text-augusta-green border border-augusta-green/20">
+          Draft complete! All 28 picks made.
         </div>
       )}
 
@@ -403,160 +376,99 @@ export default function DraftPage() {
         </div>
       )}
 
-      {/* Draft Board */}
-      <Card className="overflow-x-auto">
-        <div className="min-w-[500px]">
-          {/* Column headers - player names */}
-          <div className="grid grid-cols-[60px_repeat(4,1fr)] border-b border-gray-200">
-            <div className="p-3 text-xs font-semibold text-gray-500 bg-gray-50">Round</div>
-            {columnOrder.map((userId) => {
-              const player = draft.players.find((p) => p.userId === userId);
-              const isCurrent = draft.currentDrafter === userId;
-              return (
-                <div
-                  key={userId}
-                  className={`p-3 text-center text-sm font-semibold border-l border-gray-200 ${
-                    isCurrent && draft.status === 'active'
-                      ? 'bg-augusta-gold/10 text-augusta-green'
-                      : 'bg-gray-50 text-gray-700'
-                  }`}
-                >
-                  {player?.username}
-                  {userId === user?.id && (
-                    <span className="text-xs text-gray-400 ml-1">(you)</span>
-                  )}
-                </div>
-              );
-            })}
+      {/* Pick error */}
+      {pickError && (
+        <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+          {pickError}
+        </div>
+      )}
+
+      {/* Golfer search & list - only when it's my turn */}
+      {draft.status === 'active' && isMyTurn && (
+        <div className="space-y-3">
+          {/* Sticky search bar */}
+          <div className="sticky top-0 z-10 bg-white pb-2 pt-1 -mx-1 px-1">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search golfers..."
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-augusta-green focus:border-augusta-green"
+            />
           </div>
 
-          {/* Rows - rounds */}
-          {[1, 2, 3, 4, 5, 6, 7].map((round) => {
-            const isSnakeReverse = round % 2 === 0;
-            return (
-              <div
-                key={round}
-                className={`grid grid-cols-[60px_repeat(4,1fr)] border-b border-gray-100 ${
-                  round === draft.currentRound && draft.status === 'active'
-                    ? 'bg-augusta-green/[0.03]'
-                    : ''
-                }`}
-              >
-                {/* Round label */}
-                <div className="p-3 flex items-center gap-1 text-sm font-medium text-gray-500 bg-gray-50/50">
-                  <span>{round}</span>
-                  <span className="text-xs text-gray-400">
-                    {isSnakeReverse ? '←' : '→'}
-                  </span>
-                </div>
-
-                {/* Player cells in column order */}
-                {columnOrder.map((userId) => {
-                  const pick = getPickForCell(round, userId);
-                  const posInRound = getPositionInRound(round, userId);
-                  const isCurrent = isCurrentPick(round, posInRound);
-
-                  return (
-                    <div
-                      key={`${round}-${userId}`}
-                      className={`p-2 sm:p-3 border-l border-gray-100 min-h-[52px] flex items-center justify-center transition-colors ${
-                        isCurrent
-                          ? 'bg-augusta-gold/15 ring-2 ring-inset ring-augusta-gold'
-                          : ''
-                      }`}
-                    >
-                      {pick ? (
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900 truncate max-w-[120px]">
-                            {pick.golferName}
-                          </p>
-                          <p className="text-[10px] text-gray-400">
-                            #{pick.pickNumber}
-                          </p>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-300">
-                          {isCurrent ? '...' : ''}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Pick UI - only show for active drafter */}
-      {draft.status === 'active' && isMyTurn && (
-        <Card goldBorder className="p-4 sm:p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Your Pick &mdash; Round {draft.currentRound}
-          </h2>
-
-          {pickError && (
-            <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-              {pickError}
-            </div>
-          )}
-
-          <Input
-            label="Search golfers"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Type a golfer name..."
-          />
-
-          <div className="max-h-[400px] overflow-y-auto space-y-1">
+          {/* Golfer list with large tap targets */}
+          <div className="space-y-1.5">
             {filteredGolfers.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">
-                No golfers found.
-              </p>
+              <p className="text-sm text-gray-400 text-center py-6">No golfers found.</p>
             ) : (
               filteredGolfers.map((golfer) => (
                 <button
                   key={golfer.golferId}
-                  onClick={() => handlePick(golfer.golferId)}
+                  onClick={() => setConfirmGolfer(golfer)}
                   disabled={picking}
-                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-200 hover:border-augusta-green hover:bg-augusta-green/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                  className="w-full flex items-center justify-between px-4 py-3 min-h-[48px] rounded-xl border border-gray-200 hover:border-augusta-green hover:bg-augusta-green/5 active:bg-augusta-green/10 transition-colors disabled:opacity-50 text-left"
                 >
                   <div className="flex items-center gap-3">
-                    {golfer.ranking && (
-                      <span className="text-xs font-mono text-gray-400 w-6 text-right">
+                    {golfer.ranking != null ? (
+                      <span className="text-xs font-mono text-gray-400 w-7 text-right shrink-0">
                         #{golfer.ranking}
                       </span>
+                    ) : (
+                      <span className="w-7 shrink-0" />
                     )}
                     <span className="text-sm font-medium text-gray-900">
                       {golfer.name}
                     </span>
                   </div>
-                  <span className="text-xs text-augusta-green font-medium">
+                  <span className="text-xs text-augusta-green font-semibold shrink-0 ml-2">
                     Draft
                   </span>
                 </button>
               ))
             )}
           </div>
-        </Card>
+        </div>
       )}
 
-      {/* Waiting message for non-active players */}
+      {/* Waiting spinner for non-active players */}
       {draft.status === 'active' && !isMyTurn && (
         <Card className="p-6 text-center">
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 border-4 border-augusta-green border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-600">
-              Waiting for <span className="font-semibold">{currentDrafterName}</span> to
-              pick...
+            <p className="text-sm text-gray-600">
+              Waiting for <span className="font-semibold">{currentDrafterName}</span>...
             </p>
-            <p className="text-xs text-gray-400">Auto-refreshes every 5 seconds</p>
+            <p className="text-xs text-gray-400">Auto-refreshes every 5s</p>
           </div>
         </Card>
       )}
 
-      {/* Draft summary / pick counts */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Pick history */}
+      {myPicks.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">
+            My Picks ({myPicks.length}/7)
+          </h3>
+          <div className="space-y-1">
+            {myPicks.map((pick, i) => (
+              <div
+                key={pick.pickNumber}
+                className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-400 w-5">{i + 1}.</span>
+                  <span className="text-sm font-medium text-gray-900">{pick.golferName}</span>
+                </div>
+                <span className="text-[10px] text-gray-400">Pick #{pick.pickNumber}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All teams pick counts */}
+      <div className="grid grid-cols-2 gap-2">
         {draft.players.map((player) => {
           const playerPicks = Object.values(draft.picksByRound)
             .flat()
@@ -570,16 +482,48 @@ export default function DraftPage() {
                   : ''
               }`}
             >
-              <p className="text-sm font-semibold text-gray-900 truncate">
-                {player.username}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {playerPicks.length} / 7 picks
-              </p>
+              <p className="text-sm font-semibold text-gray-900 truncate">{player.username}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{playerPicks.length}/7 picks</p>
             </Card>
           );
         })}
       </div>
+
+      {/* Confirmation Modal */}
+      <Modal
+        isOpen={!!confirmGolfer}
+        onClose={() => setConfirmGolfer(null)}
+        title="Confirm Pick"
+      >
+        {confirmGolfer && (
+          <div className="space-y-4">
+            <div className="text-center py-2">
+              <p className="text-lg font-bold text-gray-900">{confirmGolfer.name}</p>
+              {confirmGolfer.ranking && (
+                <p className="text-sm text-gray-500">World Ranking #{confirmGolfer.ranking}</p>
+              )}
+              <p className="text-xs text-gray-400 mt-1">Round {draft.currentRound}, Pick #{draft.totalPicks + 1}</p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setConfirmGolfer(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                className="flex-1"
+                onClick={() => handlePick(confirmGolfer.golferId)}
+                loading={picking}
+              >
+                Confirm Pick
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
