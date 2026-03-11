@@ -46,11 +46,6 @@ interface User {
   isAdmin: boolean;
 }
 
-interface League {
-  id: string;
-  name: string;
-}
-
 interface Tournament {
   id: string;
   name: string;
@@ -70,9 +65,7 @@ export default function DraftPage() {
   const [confirmGolfer, setConfirmGolfer] = useState<AvailableGolfer | null>(null);
 
   // Admin create draft state
-  const [leagues, setLeagues] = useState<League[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [selectedLeague, setSelectedLeague] = useState('');
   const [selectedTournament, setSelectedTournament] = useState('');
   const [creating, setCreating] = useState(false);
   const [noDraft, setNoDraft] = useState(false);
@@ -106,14 +99,7 @@ export default function DraftPage() {
       } else {
         setNoDraft(true);
         if (meData.user.isAdmin) {
-          const [leaguesRes, tournamentsRes] = await Promise.all([
-            fetch('/api/leagues'),
-            fetch('/api/tournaments'),
-          ]);
-          if (leaguesRes.ok) {
-            const ld = await leaguesRes.json();
-            setLeagues(ld.leagues || []);
-          }
+          const tournamentsRes = await fetch('/api/tournaments');
           if (tournamentsRes.ok) {
             const td = await tournamentsRes.json();
             setTournaments(td.tournaments || []);
@@ -153,14 +139,13 @@ export default function DraftPage() {
   }, [draftTournamentId, draftLeagueId, draftStatus]);
 
   const handleCreateDraft = async () => {
-    if (!selectedLeague || !selectedTournament) return;
+    if (!selectedTournament) return;
     setCreating(true);
     try {
       const res = await fetch('/api/draft/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          leagueId: selectedLeague,
           tournamentId: selectedTournament,
         }),
       });
@@ -248,21 +233,8 @@ export default function DraftPage() {
         {user?.isAdmin ? (
           <Card goldBorder className="p-5 space-y-4">
             <h2 className="text-lg font-semibold text-gray-900">Create a Draft</h2>
-            <p className="text-sm text-gray-500">Set up a snake draft for a league and tournament.</p>
+            <p className="text-sm text-gray-500">Set up a snake draft for the current tournament.</p>
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">League</label>
-                <select
-                  value={selectedLeague}
-                  onChange={(e) => setSelectedLeague(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-augusta-green"
-                >
-                  <option value="">Select league...</option>
-                  {leagues.map((l) => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
-                </select>
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tournament</label>
                 <select
@@ -277,7 +249,7 @@ export default function DraftPage() {
                 </select>
               </div>
             </div>
-            <Button variant="primary" onClick={handleCreateDraft} loading={creating} disabled={!selectedLeague || !selectedTournament}>
+            <Button variant="primary" onClick={handleCreateDraft} loading={creating} disabled={!selectedTournament}>
               Create Draft
             </Button>
           </Card>

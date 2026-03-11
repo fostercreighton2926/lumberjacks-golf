@@ -6,11 +6,6 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { GolferResult } from '@/types';
 
-interface League {
-  id: string;
-  name: string;
-}
-
 interface MemberPick {
   userId: string;
   username: string;
@@ -134,8 +129,7 @@ export default function TournamentPage() {
   const tournamentId = params.id as string;
 
   const [tournament, setTournament] = useState<TournamentData | null>(null);
-  const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string>('');
+  const [leagueId, setLeagueId] = useState<string>('');
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -156,26 +150,25 @@ export default function TournamentPage() {
   }, [tournamentId]);
 
   useEffect(() => {
-    async function fetchLeagues() {
+    async function fetchLeague() {
       try {
         const res = await fetch('/api/leagues');
         if (!res.ok) throw new Error('Failed to fetch leagues');
         const data = await res.json();
-        setLeagues(data.leagues || []);
-        if (data.leagues?.length > 0) setSelectedLeagueId(data.leagues[0].id);
+        if (data.leagues?.length > 0) setLeagueId(data.leagues[0].id);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load leagues');
+        setError(err instanceof Error ? err.message : 'Failed to load league');
       }
     }
-    fetchLeagues();
+    fetchLeague();
   }, []);
 
   const fetchPicksAndBuild = useCallback(
     async (tournamentData?: TournamentData | null) => {
       const t = tournamentData || tournament;
-      if (!t || !selectedLeagueId) return;
+      if (!t || !leagueId) return;
       try {
-        const res = await fetch(`/api/picks/${tournamentId}/league/${selectedLeagueId}`);
+        const res = await fetch(`/api/picks/${tournamentId}/league/${leagueId}`);
         if (!res.ok) throw new Error('Failed to fetch picks');
         const data = await res.json();
         const builtTeams = buildTeams(data.members || [], t.results || []);
@@ -184,18 +177,18 @@ export default function TournamentPage() {
         setError(err instanceof Error ? err.message : 'Failed to load picks');
       }
     },
-    [tournament, selectedLeagueId, tournamentId]
+    [tournament, leagueId, tournamentId]
   );
 
   useEffect(() => {
     async function init() {
       setLoading(true);
       const t = await fetchTournament();
-      if (t && selectedLeagueId) await fetchPicksAndBuild(t);
+      if (t && leagueId) await fetchPicksAndBuild(t);
       setLoading(false);
     }
-    if (selectedLeagueId) init();
-  }, [selectedLeagueId, fetchTournament, fetchPicksAndBuild]);
+    if (leagueId) init();
+  }, [leagueId, fetchTournament, fetchPicksAndBuild]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -260,21 +253,8 @@ export default function TournamentPage() {
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center justify-between">
-        {leagues.length > 1 ? (
-          <select
-            value={selectedLeagueId}
-            onChange={(e) => setSelectedLeagueId(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-augusta-green focus:outline-none focus:ring-2 focus:ring-augusta-green/30"
-          >
-            {leagues.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
-        ) : (
-          <span className="text-sm text-gray-500">{leagues[0]?.name || ''}</span>
-        )}
+      {/* Refresh */}
+      <div className="flex justify-end">
         <Button variant="secondary" size="sm" loading={refreshing} onClick={handleRefresh} disabled={refreshing}>
           Refresh
         </Button>
@@ -284,16 +264,7 @@ export default function TournamentPage() {
         <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</div>
       )}
 
-      {leagues.length === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-gray-500 mb-4">Join a league to see team scores.</p>
-          <a href="/leagues">
-            <Button variant="primary">Join or Create a League</Button>
-          </a>
-        </Card>
-      )}
-
-      {teams.length === 0 && leagues.length > 0 && (
+      {teams.length === 0 && leagueId && (
         <Card className="p-8 text-center">
           <p className="text-gray-500 text-sm">No teams to display yet.</p>
         </Card>

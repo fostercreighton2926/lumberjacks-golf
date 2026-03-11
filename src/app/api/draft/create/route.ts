@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { getTheLeague } from '@/lib/league';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,13 +12,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { leagueId, tournamentId } = await request.json();
+    const { tournamentId, leagueId: providedLeagueId } = await request.json();
 
-    if (!leagueId || !tournamentId) {
+    if (!tournamentId) {
       return NextResponse.json(
-        { error: 'leagueId and tournamentId are required' },
+        { error: 'tournamentId is required' },
         { status: 400 }
       );
+    }
+
+    // Auto-resolve to the single league
+    let leagueId = providedLeagueId;
+    if (!leagueId) {
+      const league = await getTheLeague();
+      if (!league) return NextResponse.json({ error: 'No league found' }, { status: 404 });
+      leagueId = league.id;
     }
 
     // Verify league exists and get members

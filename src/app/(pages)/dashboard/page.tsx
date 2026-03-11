@@ -22,14 +22,6 @@ interface Tournament {
   isComplete: boolean;
 }
 
-interface League {
-  id: string;
-  name: string;
-  inviteCode: string;
-  season: { id: string; name: string; year: number };
-  members: { userId: string; username: string }[];
-}
-
 interface Standing {
   userId: string;
   username: string;
@@ -58,7 +50,6 @@ function formatScore(score: number | null): string {
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
-  const [leagues, setLeagues] = useState<League[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
   const [draftInfo, setDraftInfo] = useState<DraftInfo | null>(null);
   const [myTeam, setMyTeam] = useState<MyPick[]>([]);
@@ -92,7 +83,6 @@ export default function DashboardPage() {
 
         if (leaguesRes.ok) {
           const leaguesData = await leaguesRes.json();
-          setLeagues(leaguesData.leagues || []);
 
           if (leaguesData.leagues?.length > 0) {
             const leagueId = leaguesData.leagues[0].id;
@@ -309,9 +299,7 @@ export default function DashboardPage() {
               ))}
           </div>
         ) : (
-          <p className="text-gray-500 text-sm">
-            {leagues.length === 0 ? 'Join a league to see standings.' : 'No standings data yet.'}
-          </p>
+          <p className="text-gray-500 text-sm">No standings data yet.</p>
         )}
       </Card>
 
@@ -330,37 +318,6 @@ export default function DashboardPage() {
           </Card>
         </Link>
       </div>
-
-      {/* Your Leagues */}
-      {leagues.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Your Leagues</h2>
-          <div className="space-y-2">
-            {leagues.map((league) => (
-              <Card key={league.id} className="p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{league.name}</p>
-                    <p className="text-xs text-gray-400">{league.members.length} members</p>
-                  </div>
-                  <span className="text-xs font-mono text-gray-400 bg-gray-50 px-2 py-1 rounded">
-                    {league.inviteCode}
-                  </span>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {leagues.length === 0 && (
-        <Card className="p-6 text-center">
-          <p className="text-gray-500 text-sm mb-3">You&apos;re not in any leagues yet.</p>
-          <Link href="/leagues">
-            <Button variant="primary" size="sm">Join or Create</Button>
-          </Link>
-        </Card>
-      )}
     </div>
   );
 }

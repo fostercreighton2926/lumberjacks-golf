@@ -2,12 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Card from '@/components/ui/Card';
-import Button from '@/components/ui/Button';
-
-interface League {
-  id: string;
-  name: string;
-}
 
 interface Tournament {
   id: string;
@@ -49,8 +43,7 @@ function formatScore(score: number | null): string {
 }
 
 export default function StandingsPage() {
-  const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeagueId, setSelectedLeagueId] = useState('');
+  const [leagueId, setLeagueId] = useState('');
   const [standings, setStandings] = useState<StandingsRow[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,18 +59,17 @@ export default function StandingsPage() {
   const [breakdownLoading, setBreakdownLoading] = useState(false);
 
   useEffect(() => {
-    async function fetchLeagues() {
+    async function fetchLeague() {
       try {
         const res = await fetch('/api/leagues');
         if (!res.ok) throw new Error('Failed to fetch leagues');
         const data = await res.json();
-        setLeagues(data.leagues || []);
-        if (data.leagues?.length > 0) setSelectedLeagueId(data.leagues[0].id);
+        if (data.leagues?.length > 0) setLeagueId(data.leagues[0].id);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load leagues');
+        setError(err instanceof Error ? err.message : 'Failed to load league');
       }
     }
-    fetchLeagues();
+    fetchLeague();
   }, []);
 
   useEffect(() => {
@@ -105,11 +97,11 @@ export default function StandingsPage() {
   }, []);
 
   const fetchStandings = useCallback(async () => {
-    if (!selectedLeagueId) return;
+    if (!leagueId) return;
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/standings/${selectedLeagueId}`);
+      const res = await fetch(`/api/standings/${leagueId}`);
       if (!res.ok) throw new Error('Failed to fetch standings');
       const data = await res.json();
       setStandings(data.standings || []);
@@ -118,7 +110,7 @@ export default function StandingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedLeagueId]);
+  }, [leagueId]);
 
   useEffect(() => {
     fetchStandings();
@@ -126,13 +118,13 @@ export default function StandingsPage() {
 
   // Fetch live scores for current in-progress tournament
   useEffect(() => {
-    if (!currentTournament || !selectedLeagueId) return;
+    if (!currentTournament || !leagueId) return;
 
     async function fetchLive() {
       try {
         const [tournamentRes, picksRes] = await Promise.all([
           fetch(`/api/tournaments/${currentTournament!.id}`),
-          fetch(`/api/picks/${currentTournament!.id}/league/${selectedLeagueId}`),
+          fetch(`/api/picks/${currentTournament!.id}/league/${leagueId}`),
         ]);
         if (!tournamentRes.ok || !picksRes.ok) return;
         const tData = await tournamentRes.json();
@@ -155,7 +147,7 @@ export default function StandingsPage() {
       }
     }
     fetchLive();
-  }, [currentTournament, selectedLeagueId]);
+  }, [currentTournament, leagueId]);
 
   async function handleTournamentClick(tournamentId: string, tournamentName: string) {
     if (selectedTournament?.id === tournamentId) {
@@ -167,7 +159,7 @@ export default function StandingsPage() {
     setSelectedTournament({ id: tournamentId, name: tournamentName });
     setBreakdownLoading(true);
     try {
-      const res = await fetch(`/api/standings/${selectedLeagueId}/${tournamentId}`);
+      const res = await fetch(`/api/standings/${leagueId}/${tournamentId}`);
       if (!res.ok) throw new Error('Failed to fetch breakdown');
       const data = await res.json();
       setBreakdownTeams(
@@ -190,39 +182,13 @@ export default function StandingsPage() {
   return (
     <div className="px-4 py-4 pb-24 max-w-lg mx-auto space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900 font-serif">Standings</h1>
-        {leagues.length > 1 && (
-          <select
-            value={selectedLeagueId}
-            onChange={(e) => {
-              setSelectedLeagueId(e.target.value);
-              setSelectedTournament(null);
-              setBreakdownTeams([]);
-            }}
-            className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-augusta-green focus:outline-none focus:ring-2 focus:ring-augusta-green/30"
-          >
-            {leagues.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
-        )}
-      </div>
+      <h1 className="text-xl font-bold text-gray-900 font-serif">Standings</h1>
 
       {error && (
         <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</div>
       )}
 
-      {!loading && leagues.length === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-gray-500 mb-4">Join a league to see standings.</p>
-          <a href="/leagues">
-            <Button variant="primary">Join or Create a League</Button>
-          </a>
-        </Card>
-      )}
-
-      {loading && leagues.length > 0 && (
+      {loading && leagueId && (
         <div className="flex items-center justify-center min-h-[40vh]">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-augusta-green" />
         </div>
@@ -275,7 +241,7 @@ export default function StandingsPage() {
         </div>
       )}
 
-      {!loading && sorted.length === 0 && leagues.length > 0 && (
+      {!loading && sorted.length === 0 && leagueId && (
         <Card className="p-8 text-center">
           <p className="text-gray-500 text-sm">No standings data yet. Check back after the first tournament.</p>
         </Card>

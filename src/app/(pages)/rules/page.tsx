@@ -173,16 +173,15 @@ export default function RulesPage() {
         </div>
       </Card>
 
-      {/* Join League */}
+      {/* League Info */}
       <Card goldBorder>
         <div className="p-6 text-center space-y-2">
           <p className="text-xs font-semibold text-augusta-gold uppercase tracking-wider">
-            Join the League
+            Lumberjacks League
           </p>
           <p className="text-sm text-gray-600">
-            Go to <a href="/leagues" className="text-augusta-green font-medium hover:underline">Leagues</a> and enter the invite code:
+            All registered users are automatically in the league. Sign up and you&apos;re in!
           </p>
-          <p className="text-2xl font-mono font-bold text-augusta-green tracking-widest">LUMBER2026</p>
         </div>
       </Card>
     </div>

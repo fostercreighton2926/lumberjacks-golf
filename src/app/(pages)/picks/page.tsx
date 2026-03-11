@@ -36,11 +36,6 @@ interface Tournament {
   }>;
 }
 
-interface League {
-  id: string;
-  name: string;
-}
-
 function formatScore(score: number | null): string {
   if (score == null) return '--';
   if (score === 0) return 'E';
@@ -54,8 +49,7 @@ function formatRound(score: number | null): string {
 
 export default function MyTeamPage() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
-  const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeagueId, setSelectedLeagueId] = useState('');
+  const [leagueId, setLeagueId] = useState('');
   const [golfers, setGolfers] = useState<GolferScore[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,9 +86,8 @@ export default function MyTeamPage() {
 
         if (leaguesRes.ok) {
           const leaguesData = await leaguesRes.json();
-          setLeagues(leaguesData.leagues || []);
           if (leaguesData.leagues?.length > 0) {
-            setSelectedLeagueId(leaguesData.leagues[0].id);
+            setLeagueId(leaguesData.leagues[0].id);
           }
         }
       } catch {
@@ -108,12 +101,12 @@ export default function MyTeamPage() {
 
   // Fetch user's picks when league/tournament changes
   useEffect(() => {
-    if (!selectedLeagueId || !tournament) return;
+    if (!leagueId || !tournament) return;
 
     async function fetchPicks() {
       try {
         const picksRes = await fetch(
-          `/api/picks/${tournament!.id}?leagueId=${selectedLeagueId}`
+          `/api/picks/${tournament!.id}?leagueId=${leagueId}`
         );
         if (!picksRes.ok) return;
         const picksData = await picksRes.json();
@@ -185,7 +178,7 @@ export default function MyTeamPage() {
       }
     }
     fetchPicks();
-  }, [selectedLeagueId, tournament]);
+  }, [leagueId, tournament]);
 
   const anyScores = golfers.some(g => g.scoreToPar != null);
   const teamTotal = anyScores
@@ -244,22 +237,9 @@ export default function MyTeamPage() {
   return (
     <div className="px-4 py-4 pb-24 max-w-lg mx-auto space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">My Team</h1>
-          <p className="text-sm text-gray-500">{tournament.name}</p>
-        </div>
-        {leagues.length > 1 && (
-          <select
-            value={selectedLeagueId}
-            onChange={(e) => setSelectedLeagueId(e.target.value)}
-            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006747]"
-          >
-            {leagues.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
-        )}
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">My Team</h1>
+        <p className="text-sm text-gray-500">{tournament.name}</p>
       </div>
 
       {/* Team Total */}

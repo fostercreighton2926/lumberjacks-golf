@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { isBeforeDeadline } from '@/lib/utils';
+import { getTheLeague } from '@/lib/league';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,10 +17,12 @@ export async function GET(
     }
 
     const { tournamentId } = await params;
-    const leagueId = request.nextUrl.searchParams.get('leagueId');
-
+    // Auto-resolve to the single league; accept query param for backwards compat
+    let leagueId = request.nextUrl.searchParams.get('leagueId');
     if (!leagueId) {
-      return NextResponse.json({ error: 'leagueId query parameter is required' }, { status: 400 });
+      const league = await getTheLeague();
+      if (!league) return NextResponse.json({ error: 'No league found' }, { status: 404 });
+      leagueId = league.id;
     }
 
     const picks = await prisma.pick.findMany({
@@ -62,11 +65,19 @@ export async function POST(
     }
 
     const { tournamentId } = await params;
-    const { leagueId, picks } = await request.json();
+    const { leagueId: providedLeagueId, picks } = await request.json();
 
-    if (!leagueId || !picks) {
+    // Auto-resolve to the single league
+    let leagueId = providedLeagueId;
+    if (!leagueId) {
+      const league = await getTheLeague();
+      if (!league) return NextResponse.json({ error: 'No league found' }, { status: 404 });
+      leagueId = league.id;
+    }
+
+    if (!picks) {
       return NextResponse.json(
-        { error: 'leagueId and picks are required' },
+        { error: 'picks are required' },
         { status: 400 }
       );
     }

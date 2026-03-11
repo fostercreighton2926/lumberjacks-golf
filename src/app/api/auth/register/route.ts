@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword, createSession } from '@/lib/auth';
+import { getTheLeague } from '@/lib/league';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,16 @@ export async function POST(request: NextRequest) {
         passwordHash,
       },
     });
+
+    // Auto-join the single league
+    const league = await getTheLeague();
+    if (league) {
+      await prisma.leagueMember.upsert({
+        where: { leagueId_userId: { leagueId: league.id, userId: user.id } },
+        update: {},
+        create: { leagueId: league.id, userId: user.id },
+      });
+    }
 
     await createSession(user.id);
 
