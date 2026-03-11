@@ -84,6 +84,8 @@ function buildTeams(members: MemberPick[], results: GolferResult[]): Team[] {
         };
       });
 
+      // Only determine counting golfers if at least one has a real score
+      const anyScores = golferScores.some(g => g.scoreToPar != null);
       const sorted = [...golferScores].sort((a, b) => a._sort - b._sort);
 
       const golfers: TeamGolfer[] = golferScores.map((g) => ({
@@ -93,17 +95,21 @@ function buildTeams(members: MemberPick[], results: GolferResult[]): Team[] {
         r2: g.r2,
         r3: g.r3,
         r4: g.r4,
-        isCounting: sorted.indexOf(g) < 4,
+        isCounting: anyScores ? sorted.indexOf(g) < 4 : true,
         status: g.status,
       }));
 
-      golfers.sort((a, b) => {
-        if (a.isCounting !== b.isCounting) return a.isCounting ? -1 : 1;
-        return (a.scoreToPar ?? 999) - (b.scoreToPar ?? 999);
-      });
+      if (anyScores) {
+        golfers.sort((a, b) => {
+          if (a.isCounting !== b.isCounting) return a.isCounting ? -1 : 1;
+          return (a.scoreToPar ?? 999) - (b.scoreToPar ?? 999);
+        });
+      }
 
-      const countingScores = sorted.slice(0, 4);
-      const totalScore = countingScores.reduce((sum, g) => sum + (g.scoreToPar ?? 99), 0);
+      const countingScores = anyScores ? sorted.slice(0, 4) : [];
+      const totalScore = anyScores
+        ? countingScores.reduce((sum, g) => sum + (g.scoreToPar ?? 0), 0)
+        : 0;
 
       return { userId: member.userId, username: member.username, totalScore, points: 0, golfers };
     });
@@ -227,6 +233,9 @@ export default function TournamentPage() {
 
   if (!tournament) return null;
 
+  const hasAnyScores = teams.some(t => t.golfers.some(g => g.scoreToPar != null));
+  const tournamentStarted = new Date(tournament.startDate) <= new Date();
+
   return (
     <div className="px-4 py-4 pb-24 max-w-lg mx-auto space-y-4">
       {/* Header */}
@@ -238,10 +247,14 @@ export default function TournamentPage() {
             <span className="text-xs font-medium text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
               Final
             </span>
-          ) : (
+          ) : tournamentStarted && hasAnyScores ? (
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-augusta-green bg-augusta-green/10 px-3 py-1 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-augusta-green animate-pulse" />
               Live
+            </span>
+          ) : (
+            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+              Starts {new Date(tournament.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
           )}
         </div>
@@ -303,19 +316,25 @@ export default function TournamentPage() {
                 <span className="font-semibold text-gray-900">{team.username}</span>
               </div>
               <div className="text-right">
-                <span
-                  className={`text-lg font-bold ${
-                    team.totalScore < 0
-                      ? 'text-red-600'
-                      : team.totalScore > 0
-                      ? 'text-gray-700'
-                      : 'text-augusta-green'
-                  }`}
-                >
-                  {formatScore(team.totalScore)}
-                </span>
-                {team.points > 0 && (
-                  <p className="text-xs text-augusta-gold font-semibold">{team.points} pts</p>
+                {hasAnyScores ? (
+                  <>
+                    <span
+                      className={`text-lg font-bold ${
+                        team.totalScore < 0
+                          ? 'text-red-600'
+                          : team.totalScore > 0
+                          ? 'text-gray-700'
+                          : 'text-augusta-green'
+                      }`}
+                    >
+                      {formatScore(team.totalScore)}
+                    </span>
+                    {team.points > 0 && (
+                      <p className="text-xs text-augusta-gold font-semibold">{team.points} pts</p>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-sm text-gray-400">Awaiting scores</span>
                 )}
               </div>
             </div>
@@ -361,16 +380,18 @@ export default function TournamentPage() {
                         {formatScore(g.scoreToPar)}
                       </span>
                     </div>
-                    <div className="flex gap-3 mt-1">
-                      {['R1', 'R2', 'R3', 'R4'].map((label, i) => {
-                        const score = [g.r1, g.r2, g.r3, g.r4][i];
-                        return (
-                          <span key={label} className={`text-xs ${isDropped ? 'text-gray-300' : 'text-gray-400'}`}>
-                            {label}: {formatRound(score)}
-                          </span>
-                        );
-                      })}
-                    </div>
+                    {hasAnyScores && (
+                      <div className="flex gap-3 mt-1">
+                        {['R1', 'R2', 'R3', 'R4'].map((label, i) => {
+                          const score = [g.r1, g.r2, g.r3, g.r4][i];
+                          return (
+                            <span key={label} className={`text-xs ${isDropped ? 'text-gray-300' : 'text-gray-400'}`}>
+                              {label}: {formatRound(score)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}

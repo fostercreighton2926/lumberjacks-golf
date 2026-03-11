@@ -159,20 +159,25 @@ export default function MyTeamPage() {
           };
         });
 
-        // Determine best 4
-        const sorted = [...golferScores].sort(
-          (a, b) => (a.scoreToPar ?? 999) - (b.scoreToPar ?? 999)
-        );
-        const best4Ids = new Set(sorted.slice(0, 4).map((g) => g.golferId));
-        for (const g of golferScores) {
-          g.isCounting = best4Ids.has(g.golferId);
+        // Determine best 4 only if scores exist
+        const anyScores = golferScores.some(g => g.scoreToPar != null);
+        if (anyScores) {
+          const sorted = [...golferScores].sort(
+            (a, b) => (a.scoreToPar ?? 999) - (b.scoreToPar ?? 999)
+          );
+          const best4Ids = new Set(sorted.slice(0, 4).map((g) => g.golferId));
+          for (const g of golferScores) {
+            g.isCounting = best4Ids.has(g.golferId);
+          }
+          golferScores.sort((a, b) => {
+            if (a.isCounting !== b.isCounting) return a.isCounting ? -1 : 1;
+            return (a.scoreToPar ?? 999) - (b.scoreToPar ?? 999);
+          });
+        } else {
+          // No scores yet - all golfers shown equally, sorted by ranking
+          for (const g of golferScores) g.isCounting = true;
+          golferScores.sort((a, b) => (a.ranking ?? 999) - (b.ranking ?? 999));
         }
-
-        // Sort: counting first by score, then dropped
-        golferScores.sort((a, b) => {
-          if (a.isCounting !== b.isCounting) return a.isCounting ? -1 : 1;
-          return (a.scoreToPar ?? 999) - (b.scoreToPar ?? 999);
-        });
 
         setGolfers(golferScores);
       } catch {
@@ -182,9 +187,10 @@ export default function MyTeamPage() {
     fetchPicks();
   }, [selectedLeagueId, tournament]);
 
-  const teamTotal = golfers
-    .filter((g) => g.isCounting)
-    .reduce((sum, g) => sum + (g.scoreToPar ?? 0), 0);
+  const anyScores = golfers.some(g => g.scoreToPar != null);
+  const teamTotal = anyScores
+    ? golfers.filter((g) => g.isCounting).reduce((sum, g) => sum + (g.scoreToPar ?? 0), 0)
+    : null;
 
   if (loading) {
     return (
@@ -260,16 +266,24 @@ export default function MyTeamPage() {
       <Card goldBorder className="p-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Team Total</p>
-            <p className="text-sm text-gray-400">Best 4 of 7</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+              {anyScores ? 'Team Total' : 'Your Roster'}
+            </p>
+            <p className="text-sm text-gray-400">
+              {anyScores ? 'Best 4 of 7' : `Starts ${new Date(tournament.startDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`}
+            </p>
           </div>
-          <p
-            className={`text-3xl font-bold ${
-              teamTotal < 0 ? 'text-red-600' : teamTotal > 0 ? 'text-gray-700' : 'text-[#006747]'
-            }`}
-          >
-            {formatScore(teamTotal)}
-          </p>
+          {anyScores ? (
+            <p
+              className={`text-3xl font-bold ${
+                teamTotal! < 0 ? 'text-red-600' : teamTotal! > 0 ? 'text-gray-700' : 'text-[#006747]'
+              }`}
+            >
+              {formatScore(teamTotal)}
+            </p>
+          ) : (
+            <p className="text-lg font-semibold text-gray-400">7 golfers</p>
+          )}
         </div>
       </Card>
 
@@ -278,7 +292,7 @@ export default function MyTeamPage() {
         {golfers.map((golfer, idx) => (
           <Card
             key={golfer.golferId}
-            className={`overflow-hidden ${!golfer.isCounting ? 'opacity-60' : ''}`}
+            className={`overflow-hidden ${!golfer.isCounting && anyScores ? 'opacity-60' : ''}`}
           >
             <div
               className={`px-4 py-3 ${
@@ -292,7 +306,7 @@ export default function MyTeamPage() {
                 <div className="min-w-0">
                   <p
                     className={`text-sm font-semibold ${
-                      !golfer.isCounting ? 'line-through text-gray-400' : 'text-gray-900'
+                      !golfer.isCounting && anyScores ? 'line-through text-gray-400' : 'text-gray-900'
                     }`}
                   >
                     {golfer.golferName}
@@ -327,18 +341,20 @@ export default function MyTeamPage() {
                 </p>
               </div>
 
-              {/* Round scores */}
-              <div className="grid grid-cols-4 gap-2">
-                {['R1', 'R2', 'R3', 'R4'].map((label, i) => {
-                  const score = [golfer.r1Score, golfer.r2Score, golfer.r3Score, golfer.r4Score][i];
-                  return (
-                    <div key={label} className="text-center bg-gray-50 rounded py-1">
-                      <p className="text-[10px] text-gray-400 uppercase">{label}</p>
-                      <p className="text-sm font-medium text-gray-700">{formatRound(score)}</p>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* Round scores - only show when scores exist */}
+              {anyScores && (
+                <div className="grid grid-cols-4 gap-2">
+                  {['R1', 'R2', 'R3', 'R4'].map((label, i) => {
+                    const score = [golfer.r1Score, golfer.r2Score, golfer.r3Score, golfer.r4Score][i];
+                    return (
+                      <div key={label} className="text-center bg-gray-50 rounded py-1">
+                        <p className="text-[10px] text-gray-400 uppercase">{label}</p>
+                        <p className="text-sm font-medium text-gray-700">{formatRound(score)}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </Card>
         ))}
