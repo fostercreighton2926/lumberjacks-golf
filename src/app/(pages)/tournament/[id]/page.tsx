@@ -39,6 +39,7 @@ interface TeamGolfer {
   r4: number | null;
   isCounting: boolean;
   status: string;
+  position: number | null;
 }
 
 interface Team {
@@ -80,6 +81,7 @@ function buildTeams(members: MemberPick[], results: GolferResult[]): Team[] {
           r3: result?.r3Score ?? null,
           r4: result?.r4Score ?? null,
           status: result?.status ?? 'active',
+          position: result?.position ?? null,
           _sort: result?.scoreToPar ?? 999,
         };
       });
@@ -97,6 +99,7 @@ function buildTeams(members: MemberPick[], results: GolferResult[]): Team[] {
         r4: g.r4,
         isCounting: anyScores ? sorted.indexOf(g) < 4 : true,
         status: g.status,
+        position: g.position,
       }));
 
       if (anyScores) {
@@ -279,106 +282,95 @@ export default function TournamentPage() {
         </Card>
       )}
 
-      {/* Teams stacked on mobile */}
-      <div className="space-y-4">
-        {teams.map((team, teamIdx) => (
-          <Card
-            key={team.userId}
-            goldBorder={teamIdx === 0}
-            className="overflow-hidden"
-          >
-            {/* Team header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <span className="w-7 h-7 rounded-full bg-augusta-green text-white text-xs font-bold flex items-center justify-center">
-                  {teamIdx + 1}
+      {/* Leaderboard table */}
+      {teams.length > 0 && (
+        <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+          {/* Column headers */}
+          <div className="grid grid-cols-[2rem_1fr_3rem_2rem_2rem_2rem_2rem] gap-x-1 px-3 py-2 bg-gray-100 border-b border-gray-200">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase text-center">POS</span>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase">GOLFER</span>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase text-right">TOT</span>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase text-right">R1</span>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase text-right">R2</span>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase text-right">R3</span>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase text-right">R4</span>
+          </div>
+
+          {teams.map((team, teamIdx) => (
+            <div key={team.userId}>
+              {/* Team header row */}
+              <div className="grid grid-cols-[2rem_1fr_3rem_2rem_2rem_2rem_2rem] gap-x-1 px-3 py-2.5 bg-augusta-green/90 border-b border-augusta-green/20">
+                <span className="text-xs font-bold text-white text-center self-center">{teamIdx + 1}</span>
+                <span className="text-sm font-bold text-white self-center truncate">{team.username}</span>
+                <span className={`text-sm font-bold text-right self-center ${
+                  hasAnyScores
+                    ? team.totalScore < 0 ? 'text-yellow-300' : team.totalScore > 0 ? 'text-white/70' : 'text-white'
+                    : 'text-white/50'
+                }`}>
+                  {hasAnyScores ? formatScore(team.totalScore) : '--'}
                 </span>
-                <span className="font-semibold text-gray-900">{team.username}</span>
-              </div>
-              <div className="text-right">
-                {hasAnyScores ? (
-                  <>
-                    <span
-                      className={`text-lg font-bold ${
-                        team.totalScore < 0
-                          ? 'text-red-600'
-                          : team.totalScore > 0
-                          ? 'text-gray-700'
-                          : 'text-augusta-green'
-                      }`}
-                    >
-                      {formatScore(team.totalScore)}
-                    </span>
-                    {team.points > 0 && (
-                      <p className="text-xs text-augusta-gold font-semibold">{team.points} pts</p>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-sm text-gray-400">Awaiting scores</span>
+                {team.points > 0 && (
+                  <span className="col-span-4 text-[10px] text-yellow-300 font-semibold text-right self-center">
+                    {team.points} pts
+                  </span>
                 )}
               </div>
-            </div>
 
-            {/* Golfer rows */}
-            <div className="divide-y divide-gray-50">
+              {/* Golfer rows */}
               {team.golfers.map((g, gi) => {
                 const isDropped = !g.isCounting;
                 const isCut = ['cut', 'wd', 'dq', 'CUT', 'WD', 'DQ'].includes(g.status);
+                const textColor = isDropped ? 'text-gray-300' : 'text-gray-700';
+                const scoreColor = isDropped
+                  ? 'text-gray-300'
+                  : g.scoreToPar != null && g.scoreToPar < 0
+                  ? 'text-red-600'
+                  : g.scoreToPar != null && g.scoreToPar > 0
+                  ? 'text-gray-500'
+                  : 'text-gray-700';
+
                 return (
                   <div
                     key={gi}
-                    className={`px-4 py-2.5 ${
-                      isDropped ? 'opacity-50' : ''
-                    } ${g.isCounting ? 'bg-[#006747]/[0.03]' : ''}`}
+                    className={`grid grid-cols-[2rem_1fr_3rem_2rem_2rem_2rem_2rem] gap-x-1 px-3 py-2 border-b border-gray-50 last:border-0 ${
+                      g.isCounting ? 'bg-white' : 'bg-gray-50/50'
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={`text-sm font-medium truncate ${
-                            isDropped ? 'line-through text-gray-400' : 'text-gray-900'
-                          }`}
-                        >
-                          {g.name}
-                          {isCut && (
-                            <span className="ml-1.5 text-[10px] text-red-500 font-semibold uppercase no-underline inline-block" style={{textDecoration: 'none'}}>
-                              {g.status.toUpperCase()}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <span
-                        className={`text-sm font-bold ml-2 ${
-                          isDropped
-                            ? 'text-gray-400'
-                            : g.scoreToPar != null && g.scoreToPar < 0
-                            ? 'text-red-600'
-                            : g.scoreToPar != null && g.scoreToPar > 0
-                            ? 'text-gray-700'
-                            : 'text-augusta-green'
-                        }`}
-                      >
-                        {formatScore(g.scoreToPar)}
+                    {/* Position */}
+                    <span className={`text-xs text-center self-center ${isDropped ? 'text-gray-300' : 'text-gray-400'}`}>
+                      {g.position ?? '--'}
+                    </span>
+
+                    {/* Name */}
+                    <span className={`text-xs self-center truncate pr-1 ${
+                      isDropped ? 'line-through text-gray-300' : 'text-gray-800'
+                    }`}>
+                      {g.name}
+                      {isCut && !isDropped && (
+                        <span className="ml-1 text-[9px] text-red-400 font-bold no-underline" style={{textDecoration:'none'}}>
+                          {g.status.toUpperCase()}
+                        </span>
+                      )}
+                    </span>
+
+                    {/* TOT */}
+                    <span className={`text-xs font-semibold text-right self-center ${scoreColor}`}>
+                      {formatScore(g.scoreToPar)}
+                    </span>
+
+                    {/* R1–R4 */}
+                    {[g.r1, g.r2, g.r3, g.r4].map((r, i) => (
+                      <span key={i} className={`text-xs text-right self-center ${textColor}`}>
+                        {formatRound(r)}
                       </span>
-                    </div>
-                    {hasAnyScores && (
-                      <div className="flex gap-3 mt-1">
-                        {['R1', 'R2', 'R3', 'R4'].map((label, i) => {
-                          const score = [g.r1, g.r2, g.r3, g.r4][i];
-                          return (
-                            <span key={label} className={`text-xs ${isDropped ? 'text-gray-300' : 'text-gray-400'}`}>
-                              {label}: {formatRound(score)}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
+                    ))}
                   </div>
                 );
               })}
             </div>
-          </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
