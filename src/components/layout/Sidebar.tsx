@@ -9,10 +9,10 @@ interface SidebarProps {
 
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: '◉' },
+  { href: '/leaderboard', label: 'Live', icon: null, live: true },
   { href: '/draft', label: 'Draft', icon: '🐍' },
   { href: '/picks', label: 'My Team', icon: '✎' },
   { href: '/standings', label: 'Standings', icon: '☰' },
-
   { href: '/rules', label: 'Rules', icon: '📋' },
 ];
 
@@ -37,7 +37,10 @@ export default function Sidebar({ currentPath, isAdmin }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-6 space-y-1">
         {navLinks.map((link) => {
-          const isActive = currentPath === link.href || currentPath.startsWith(link.href + '/');
+          const isActive =
+            currentPath === link.href ||
+            currentPath.startsWith(link.href + '/') ||
+            (link.href === '/leaderboard' && currentPath.startsWith('/tournament'));
           return (
             <Link
               key={link.href}
@@ -48,7 +51,13 @@ export default function Sidebar({ currentPath, isAdmin }: SidebarProps) {
                   : 'text-white/80 hover:bg-white/5 hover:text-white'
               }`}
             >
-              <span className="text-base w-5 text-center">{link.icon}</span>
+              {link.live ? (
+                <span className="w-5 flex items-center justify-center">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                </span>
+              ) : (
+                <span className="text-base w-5 text-center">{link.icon}</span>
+              )}
               <span>{link.label}</span>
             </Link>
           );
